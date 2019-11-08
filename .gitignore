@@ -1,0 +1,14 @@
+############################
+### Ignore The Following ###
+############################
+
+# Ignore The Following File Extensions
+######################################
+
+*.fits
+*.pdf
+*.dat
+*.txt
+*.jpg
+*.png
+
