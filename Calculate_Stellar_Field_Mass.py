@@ -38,12 +38,11 @@ def apogee_field_mass(age,metallicity,maxabsH,minabsH,selectfunc,number,parsec_p
 	age_iso = parsec_ages[age_index]
 
 	###interpolate and find mass from int_IMF
-	single_iso = np.where((parsec['Zini']==z_iso)&(parsec['logAge']==age_iso)&(parsec['Hmag']<=maxabsH))
+	single_iso = np.where((parsec['Zini']==z_iso)&(parsec['logAge']==age_iso))
 
-	upto = np.where(parsec[single_iso]['Hmag']==min(parsec[single_iso]['Hmag']))
-	new_parsec = parsec[single_iso][0:int(np.squeeze(upto))]
+	new_parsec = parsec[single_iso]
 
-	inter_iso = interp1d(new_parsec['Hmag'][::-1],new_parsec['int_IMF'][::-1],kind='cubic',bounds_error=False,fill_value='extrapolate',assume_sorted=False)
+	inter_iso = interp1d(new_parsec['Hmag'][::-1],new_parsec['int_IMF'][::-1],kind='cubic', bounds_error=False,fill_value='extrapolate',assume_sorted=False)
 
 	diff_IMF = np.abs(inter_iso(maxabsH)-inter_iso(minabsH))
 
