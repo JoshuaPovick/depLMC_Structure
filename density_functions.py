@@ -62,11 +62,18 @@ from astropy.table import Table
 import numpy as np
 from scipy.interpolate import interp1d
 
-def findclosestparsec(age,metallicity,parsec_ascii_table):
+def findclosestparsec(parsec_ascii_table,age,feh):
+    '''
+    Find closest PARSEC isochrone and return the age and z fraction
+    
+    parsec_ascii_table: ascii table of isochrone to use (label = 3, RGB stars)
+    age: age of field to use
+    feh: metallicity 
+    '''
     
     #find closest parsec isochrone z fraction
     parsec_mets = np.unique(np.asarray((np.log10(parsec_ascii_table['Zini']/0.02))))
-    met_index = np.absolute(parsec_mets-metallicity*np.ones(len(parsec_mets))).argmin()
+    met_index = np.absolute(parsec_mets-feh*np.ones(len(parsec_mets))).argmin()
     z_iso = round(0.02*(10**parsec_mets[met_index]),10)
     
     #find closest parsec isochrone age
@@ -75,21 +82,32 @@ def findclosestparsec(age,metallicity,parsec_ascii_table):
     age_index = np.absolute(parsec_ages-age*np.ones(len(parsec_ages))).argmin()
     age_iso = parsec_ages[age_index]
     
-    #pick out isochrone
-    #single_iso = np.where((parsec_ascii_table['Zini']==z_iso)&
-    #                      (parsec_ascii_table['logAge']==age_iso)&
-    #                      (parsec_ascii_table['Hmag']<=maxabsH))
-    
     return age_iso, z_iso
 
-def fieldmass(age_iso,z_iso,maxabsH,minabsH,selectfunc,number,parsec_ascii_table):
+def fieldmass(age_iso,z_iso,absH,sf_brt,sf_fnt,parsec_ascii_table):
+    
+    '''
+    Calculate Mass of APOGEE Field with PARSEC isochrones:
+    
+      SF_brt x N_brt + SF_fnt x N_fnt
+    ----------------------------------- = field mass in mSol
+    intIMF(minH_brt) - intIMF(maxH_fnt)
+    
+    age_iso: Age of PARSEC isochrone to use
+    z_iso: Z fraction of PARSEC isochrone to use
+    
+    absH: arraylike object that contains all the Hmags for the whole field
+    
+    sf_brt: arraylike object that contains selection function for brt stars
+    sf_fnt: arraylike object that contains selection function for fnt stars
+    
+    parsec_ascii_table: ascii table of isochrone to use (label = 3, RGB stars)
+    
+    '''
     
     single_iso = np.where((parsec_ascii_table['Zini']==z_iso)&
-                          (parsec_ascii_table['logAge']==age_iso)&
-                          (parsec_ascii_table['Hmag']<=maxabsH))
-    
-    #upto = np.where(parsec_ascii_table[single_iso]['Hmag']==np.min(parsec_ascii_table[single_iso]['Hmag']))
-    #new_parsec = parsec_ascii_table[single_iso][0:int(np.squeeze(upto))]
+                          (parsec_ascii_table['logAge']==age_iso))#&
+                          #(parsec_ascii_table['Hmag']<=np.max(absH)))
     
     x1 = parsec_ascii_table[single_iso]['Hmag']
     y1 = parsec_ascii_table[single_iso]['int_IMF']
@@ -108,18 +126,15 @@ def fieldmass(age_iso,z_iso,maxabsH,minabsH,selectfunc,number,parsec_ascii_table
     
     inter_iso = interp1d(x2,y2,kind='cubic',bounds_error=False,fill_value='extrapolate',assume_sorted=False)
     
-    #inter_iso = interp1d(parsec_ascii_table[single_iso]['Hmag'][::-1],
-                         #parsec_ascii_table[single_iso]['int_IMF'][::-1],kind='cubic',
-                         #bounds_error=False,fill_value='extrapolate',assume_sorted=False) 
-                          
-                          #fill_value=(np.nan,np.nan)
+    diff_IMF = np.absolute(inter_iso(np.max(absH))-inter_iso(np.min(absH)))
     
-#     inter_iso = interp1d(new_parsec['Hmag'][::-1],new_parsec['int_IMF'][::-1],kind='cubic',bounds_error=False,
-#                          fill_value='extrapolate',assume_sorted=False) #fill_value=(np.nan,np.nan)
+    if len(sf_fnt) == 0:
+        numerator = sf_brt[0]*len(sf_brt) 
+        
+    else:
+        numerator = sf_brt[0]*len(sf_brt) + sf_fnt[0]*len(sf_fnt)
     
-    diff_IMF = np.absolute(inter_iso(maxabsH)-inter_iso(minabsH))
-    
-    return (selectfunc*number)/diff_IMF
+    return numerator/diff_IMF
 
 
 # In[ ]:
@@ -199,8 +214,45 @@ def apogee_field_area(field,data):
     return hull.volume
 
 
-# In[ ]:
+#################
+### STAR AGES ###
+#################
 
+### Age model
+def parsec_age(w,x,y,z):
+    p=[28.90025823,-0.8303683,3.28088688,-0.08771859,-7.48008086,-0.66424502,\
+       0.04407313,0.13976222,0.74247359]
+    return p[0]+p[1]*w+p[2]*x+p[3]*y+p[4]*z+p[5]*np.multiply(x,z)+p[6]*np.multiply(y,z)+p[7]*(x**2)+p[8]*(z**2)
+
+def noisydata(lgT,lgTERR,ks,ksERR,mh,mhERR,cfe,cfeERR,nfe,nfeERR,feh,fehERR,lgg,lggERR):
+    carbon = 0.28115244582676185 # derived in initial age calc
+    nitrogen = 0.06901474154376043 # derived in initial age calc
+    Tnoise = np.random.normal(0, 0.434*(lgTERR/lgT)) #logTeff
+    Knoise = np.random.normal(0, ksERR) #Ks
+    MHnoise = np.random.normal(0, mhERR) #[M/H]
+    
+    cm = cfe + feh - mh
+    nm = nfe + feh - mh
+    CMERR = np.sqrt((cfeERR)**2+(fehERR)**2+(mhERR)**2)
+    NMERR = np.sqrt((nfeERR)**2+(fehERR)**2+(mhERR)**2)
+    
+    expcarERR = 10**(cm)*np.log(10)*CMERR
+    expnitERR = 10**(nm)*np.log(10)*NMERR
+    
+    xcarb = carbon*10**(cm)
+    xnitr = nitrogen*10**(nm)
+    fac = (xcarb+xnitr)/(carbon+nitrogen) #factor from Salaris correction
+    facERR = np.sqrt((expcarERR)**2+(expnitERR)**2)/(carbon+nitrogen)
+    
+    facnoise = np.random.normal(0, np.absolute(0.434*(facERR/fac)))
+    
+    lggnoise = np.random.normal(0, lggERR) #logg
+    Tnew = lgT + ((-1)**np.random.randint(2))*Tnoise
+    Knew = ks + ((-1)**np.random.randint(2))*Knoise
+    MHnew = mh + ((-1)**np.random.randint(2))*MHnoise
+    facnew = fac + ((-1)**np.random.randint(2))*facnoise
+    lggnew = lgg + ((-1)**np.random.randint(2))*lggnoise
+    return Tnew, Knew, MHnew, facnew, lggnew
 
 #############
 ### Other ###
