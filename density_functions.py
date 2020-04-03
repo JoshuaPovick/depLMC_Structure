@@ -219,40 +219,91 @@ def apogee_field_area(field,data):
 #################
 
 ### Age model
-def parsec_age(w,x,y,z):
-    p=[28.90025823,-0.8303683,3.28088688,-0.08771859,-7.48008086,-0.66424502,\
-       0.04407313,0.13976222,0.74247359]
-    return p[0]+p[1]*w+p[2]*x+p[3]*y+p[4]*z+p[5]*np.multiply(x,z)+p[6]*np.multiply(y,z)+p[7]*(x**2)+p[8]*(z**2)
+def find_age(lt,k,feh,lg):
+    #['lt' 'k' 'feh' 'lg' 'ltlg' 'klg' 'fehlg' 'k2' 'lg2']
+    p = [2.34865658e+01,7.73561422e-01,3.31229224e+00,-3.92253575e-02,-4.71932940e+00,
+         -8.67142123e-01,-6.83193259e-01,1.93831669e-02,1.39372987e-01,8.31208860e-01]
+    age = p[0] + p[1]*lt + p[2]*k + p[3]*feh + p[4]*lg + p[5]*np.multiply(lt,lg) + p[6]*np.multiply(k,lg) + p[7]*np.multiply(feh,lg) + p[8]*np.square(k) + p[9]*np.square(lg)
+    return age
 
-def noisydata(lgT,lgTERR,ks,ksERR,mh,mhERR,cfe,cfeERR,nfe,nfeERR,feh,fehERR,lgg,lggERR):
-    carbon = 0.28115244582676185 # derived in initial age calc
-    nitrogen = 0.06901474154376043 # derived in initial age calc
-    Tnoise = np.random.normal(0, 0.434*(lgTERR/lgT)) #logTeff
-    Knoise = np.random.normal(0, ksERR) #Ks
-    MHnoise = np.random.normal(0, mhERR) #[M/H]
+####################################
+### Get Uncertainties: Add Noise ###
+####################################
+
+def add_noise(quant,quant_err):
+    '''
+    Add noise to data and return new values
     
+    Parameters:
+        quant: 1d array-like data to add noise to
+        quant_err: 1d array-like object of errors for quant
+    
+    return: 1d array-like object of data with added noise
+    
+    '''
+    
+    noise = np.random.normal(0,quant_err)
+    new = quant + noise
+    return new
+
+def add_pos_noise(quant,quant_err):
+    '''
+    Add noise to data and return new values that are only positive
+    
+    Parameters:
+        quant: 1d array-like data to add noise to
+        quant_err: 1d array-like object of errors for quant
+    
+    return: 1d array-like object of data with added noise
+    
+    '''
+    
+    noise = np.absolute(np.random.normal(0,quant_err))
+    new = quant + noise
+    return new
+
+def sal_noise(cfe,cfeERR,nfe,nfeERR,feh,fehERR,mh,mhERR):
+    '''
+    Calculate noisy values for Salaris calculation with C and N.
+    This does not take into account actually plugging in [M/H],
+    for that use add_noise.
+    
+    Parameters:
+        cfe: 1d array-like object of carbon abundances
+        cfeERR: 1d array-like object of carbon abundance errors
+        nfe: 1d array-like object of nitrogen abundances
+        nfeERR: 1d array-like object of nitrogen abundance errors
+        feh: 1d array-like object of iron abundances
+        fehERR: 1d array-like object of iron abundance errors
+        
+    Return:
+        noisy Salaris correction ffac
+    '''
+    
+    sol_C = 0.28115244582676185 #solar carbon abundance
+    sol_N = 0.06901474154376043 #solar nitrogen abundance
+    
+    # Calculate [C/M] and [N/M] with respective errors
     cm = cfe + feh - mh
     nm = nfe + feh - mh
     CMERR = np.sqrt((cfeERR)**2+(fehERR)**2+(mhERR)**2)
     NMERR = np.sqrt((nfeERR)**2+(fehERR)**2+(mhERR)**2)
     
-    expcarERR = 10**(cm)*np.log(10)*CMERR
-    expnitERR = 10**(nm)*np.log(10)*NMERR
+    # Calculate X fractions for C and N with respective errors
+    x_C = sol_C*10**(cm)
+    x_N = sol_N*10**(nm)
     
-    xcarb = carbon*10**(cm)
-    xnitr = nitrogen*10**(nm)
-    fac = (xcarb+xnitr)/(carbon+nitrogen) #factor from Salaris correction
-    facERR = np.sqrt((expcarERR)**2+(expnitERR)**2)/(carbon+nitrogen)
+    x_CERR = 10**(cm)*np.log(10)*CMERR
+    x_NERR = 10**(nm)*np.log(10)*NMERR
     
-    facnoise = np.random.normal(0, np.absolute(0.434*(facERR/fac)))
+    # Calcuate f factor in Salaris correction with respective errors
+    ffac = (x_C+x_N)/(sol_C+sol_N) #factor from Salaris correction
+    ffacERR = np.sqrt((x_CERR)**2+(x_NERR)**2)/(sol_C+sol_N)
     
-    lggnoise = np.random.normal(0, lggERR) #logg
-    Tnew = lgT + ((-1)**np.random.randint(2))*Tnoise
-    Knew = ks + ((-1)**np.random.randint(2))*Knoise
-    MHnew = mh + ((-1)**np.random.randint(2))*MHnoise
-    facnew = fac + ((-1)**np.random.randint(2))*facnoise
-    lggnew = lgg + ((-1)**np.random.randint(2))*lggnoise
-    return Tnew, Knew, MHnew, facnew, lggnew
+    # Add noise to calculated f factor
+    ffacnoise = np.random.normal(0, np.absolute(0.434*(ffacERR/ffac))) 
+    
+    return ffac + ffacnoise
 
 #############
 ### Other ###
