@@ -190,41 +190,41 @@ from astropy.table import Table
 import numpy as np
 from scipy.spatial import ConvexHull
 
-def apogee_field_area(field,data):
+# def apogee_field_area(field,data):
     
-    """
-    This calculates the areal extent of an APOGEE field (kpc^2)
-    - field: string of name of field to get area
-    - data: table of data for field
-    """
+#     """
+#     This calculates the areal extent of an APOGEE field (kpc^2)
+#     - field: string of name of field to get area
+#     - data: table of data for field
+#     """
     
-    fld = np.where(data['FIELD']==field)
+#     fld = np.where(data['FIELD']==field)
     
-    ###calculate the centroid
-    x_m0, y_m0, dist = LMCdisk_cart(data[fld]['RA'],data[fld]['DEC'])
+#     ###calculate the centroid
+#     x_m0, y_m0, dist = LMCdisk_cart(data[fld]['RA'],data[fld]['DEC'])
     
-    points = []
-    for j in range(len(np.squeeze(fld))):
-        points.append([x_m0[j],y_m0[j]])
-    points = np.asarray(points)
+#     points = []
+#     for j in range(len(np.squeeze(fld))):
+#         points.append([x_m0[j],y_m0[j]])
+#     points = np.asarray(points)
     
-    #find exterior points and area using Convex Hull algorithm 
-    hull = ConvexHull(points)
+#     #find exterior points and area using Convex Hull algorithm 
+#     hull = ConvexHull(points)
     
-    return hull.volume
+#     return hull.volume
 
 
 #################
 ### STAR AGES ###
 #################
 
-### Age model
-def find_age(lt,k,feh,lg):
-    #['lt' 'k' 'feh' 'lg' 'ltlg' 'klg' 'fehlg' 'k2' 'lg2']
-    p = [2.34865658e+01,7.73561422e-01,3.31229224e+00,-3.92253575e-02,-4.71932940e+00,
-         -8.67142123e-01,-6.83193259e-01,1.93831669e-02,1.39372987e-01,8.31208860e-01]
-    age = p[0] + p[1]*lt + p[2]*k + p[3]*feh + p[4]*lg + p[5]*np.multiply(lt,lg) + p[6]*np.multiply(k,lg) + p[7]*np.multiply(feh,lg) + p[8]*np.square(k) + p[9]*np.square(lg)
-    return age
+# ### Age model
+# def find_age(lt,k,feh,lg):
+#     #['lt' 'k' 'feh' 'lg' 'ltlg' 'klg' 'fehlg' 'k2' 'lg2']
+#     p = [2.34865658e+01,7.73561422e-01,3.31229224e+00,-3.92253575e-02,-4.71932940e+00,
+#          -8.67142123e-01,-6.83193259e-01,1.93831669e-02,1.39372987e-01,8.31208860e-01]
+#     age = p[0] + p[1]*lt + p[2]*k + p[3]*feh + p[4]*lg + p[5]*np.multiply(lt,lg) + p[6]*np.multiply(k,lg) + p[7]*np.multiply(feh,lg) + p[8]*np.square(k) + p[9]*np.square(lg)
+#     return age
 
 ####################################
 ### Get Uncertainties: Add Noise ###
